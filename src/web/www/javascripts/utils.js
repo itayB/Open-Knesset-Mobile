@@ -50,258 +50,6 @@ function GATrackBill(url, callback) {
  */
 
 /**
- * Handle updating the application's data from teh internet (oknesset.org)
- */
-function processData(data) {
-	// stringifying BEFORE using the data, because the data may change
-	var partyDataString = JSON.stringify(data.partyData);
-	var memberDataString = JSON.stringify(data.memberData);
-	updateData(data);
-	localStorage.setItem("DataDate", data.dataDate.getTime());
-	localStorage.setItem("PartyData", partyDataString);
-	localStorage.setItem("MemberData", memberDataString);
-}
-
-function loadInitialData() {
-	if (localStorage.getItem("PartyData") != null && localStorage.getItem("MemberData") != null) {
-		// load data from localstorage (most updated locally)
-		setTimeout(function() {
-			var partyData = JSON.parse(localStorage.getItem("PartyData"));
-			var memberData = JSON.parse(localStorage.getItem("MemberData"));
-			updateMemberData(memberData);
-			updatePartyData(partyData);
-			checkFullDataFromWeb();
-		}, 0);
-	} else {
-		// set the slimData date, it will be overridden once the partData is
-		// loaded
-		localStorage.setItem("DataDate", slimDataDate.getTime());
-		// load initial data (data shipped with the application)
-		if (!isPhoneGap()) {
-			processData({
-				memberData : memberData,
-				partyData : partyData,
-				dataDate : dataDate});
-			checkFullDataFromWeb();
-		} else {
-			Ext.Ajax.request({
-				url : 'javascripts/models/partyData.js.jpg',
-				callback : function(options, success, response) {
-					// for some reason, Ext.Ajax returns success == false when
-					// the local request returns
-					if (response.responseText != null
-							&& response.responseText.length > 0) {
-						eval(response.responseText);
-						processData({
-							memberData : memberData,
-							partyData : partyData,
-							dataDate : dataDate});
-						checkFullDataFromWeb();
-					} else {
-						OKnesset.log('Full data load failure ('
-								+ JSON.stringify(response)
-								+ ') with status code ' + response.status);
-						checkFullDataFromWeb();
-					}
-				}
-			});
-		}
-	}
-}
-
-function checkFullDataFromWeb() {
-	var dataDate = new Date(
-			parseInt(localStorage.getItem("DataDate")));
-	var now = new Date();
-
- 		OKnesset.log("** now=" + dateToString(now) + " DataDate= "
-			+ dateToString(dataDate));
-
-	// 24 hours is 1000*60*60*24 = 86,400,000 miliseconds
-	if (now.getTime() > dataDate.getTime() + 86400000) {
-		if (!isPhoneGap()) {
-			// fetchFullDataFromWeb();
-			processFullDataFromWebByLocalScript();
-			return;
-		}
-
-		// Check internet connection
-		if (navigator.network.connection.type == Connection.ETHERNET
-				|| navigator.network.connection.type == Connection.WIFI
-				||
-		// 		) {
-
-		// 	OKnesset.log("** updating full data by WIFI");
-		// 	fetchFullDataFromWeb();
-		// } else if (
-			navigator.network.connection.type == Connection.CELL_2G
-				|| navigator.network.connection.type == Connection.CELL_3G
-				|| navigator.network.connection.type == Connection.CELL_4G
-				|| (isAndroid() && navigator.network.connection.type == Connection.UNKNOWN)) {
-
-			// OKnesset.log("** updating full data by 3G");
-			// var dialogtxt = OKnesset.strings.downloadDataText;
-			// navigator.notification.confirm(dialogtxt,
-			// 		checkFullDataFromWebCallback,
-			// 		OKnesset.strings.downloadDataTitle,
-			// 		OKnesset.strings.dialogOKCancel);
-		 	OKnesset.log("** updating full data");
-		 	fetchFullDataFromWeb();
-
-		} else {
-			OKnesset.log("** not updating full data becuase of no internet");
-		}
-	}
-
-}
-
-// function checkFullDataFromWebCallback(btnIndex) {
-// 	if (btnIndex == 2) {
-// 		fetchFullDataFromWeb();
-// 	}
-// }
-
-function processFullDataFromWebByLocalScript() {
-	OKnessetParser.loadData(function(data) {
-		displayFetchCompleteNotification();
-
-		processData({
-			memberData : data.memberData,
-			partyData : data.partyData,
-			dataDate : new Date()});
-		// var resultParty = JSON.stringify(data.partyData);
-		// var resultMember = JSON.stringify(data.memberData);
-		// updatePartyData(data);
-		// var now = new Date();
-		// localStorage.setItem("DataDate", now.getTime());
-		// localStorage.setItem("PartyData", resultParty);
-		// localStorage.setItem("MemberData", resultMember);
-
-		OKnesset.log("Data fetch from web complete");
-	});
-}
-
-function fetchFullDataFromWeb() {
-	// load the update script from the web, as it may change according to api
-	// changes in oknesset.org
-	Ext.Ajax
-			.request({
-				url : 'http://open-knesset-mobile.appspot.com/static/v1.5/createInitialData.js',
-				success : function(response, options) {
-					eval(response.responseText);
-					OKnesset.log('Oknesset web parser loaded from web');
-					OKnessetParser.loadData(function(data) {
-						displayFetchCompleteNotification();
-						processData({
-							memberData : data.memberData,
-							partyData : data.partyData,
-							dataDate : new Date()});					
-					});
-				},
-				failure : function(response, options) {
-					OKnesset
-							.log('Oknesset web parser failed to load from web ('
-									+ JSON.stringify(response)
-									+ ') with status code '
-									+ response.status
-									+ '. Attempting to laod locally');
-					fetchFullDataFromWebByLocalScript();
-				}
-			});
-
-	function fetchFullDataFromWebByLocalScript() {
-		Ext.Ajax.request({
-			url : 'javascripts/createInitialData.js',
-			callback : function(options, success, response) {
-				// for some reason, Ext.Ajax returns success == false when the
-				// local request returns
-				if (response.responseText != null
-						&& response.responseText.length > 0) {
-					eval(response.responseText);
-					OKnesset.log('Oknesset web parser loaded locally');
-					processFullDataFromWebByLocalScript();
-				} else {
-					OKnesset.log('Oknesset web parser failed to load locally ('
-							+ JSON.stringify(response) + ') with status code '
-							+ response.status + '. Aborting content update.');
-				}
-			}
-		});
-	}
-
-}
-
-function displayFetchCompleteNotification() {
-	if (!OKnesset.fetchCompleteOverlay) {
-		OKnesset.fetchCompleteOverlay = new Ext.Panel({
-			floating : true,
-			centered : true,
-			width : 300,
-			height : 120,
-			cls : 'textCenter',
-			styleHtmlContent : true,
-			html : OKnesset.strings.updateComplete,
-			dockedItems : [ {
-				dock : 'top',
-				xtype : 'toolbar',
-				title : OKnesset.strings.oknessetName
-			} ]
-		});
-	}
-	OKnesset.fetchCompleteOverlay.show('pop');
-
-	Ext.defer(function() {
-		OKnesset.fetchCompleteOverlay.hide();
-	}, isPhoneGap() && isAndroid() ? 4000 : 2000);
-}
-
-function refreshTopPanel(){
-	var stack = Ext.ControllerManager.get("navigation").stack;
-    var top = Ext.ControllerManager.get("navigation").top.controller;
-    if (refreshIfExists(Ext.ControllerManager.get(top))){
-    	return true;
-    }
-
-
-    for (var i = stack.length - 1 ; i >= 0 ; i--){
-    	if (refreshIfExists(Ext.ControllerManager.get(stack[i].controller))){
-    		return true;
-    	}
-    }
-
-    return false;
-
-    function refreshIfExists(controller){
-    	if (controller.refresh){
-    		controller.refresh();
-    		return true;
-    	} else {
-    		return false;
-    	}
-    }
-}
-
-// update the stores with the full data (replace the slimData)
-function updateData(data){
-	OKnesset.log("-=updateData=-");
-	updatePartyData(data.partyData);
-	updateMemberData(data.memberData);
-	OKnesset.log("Refreshed panel? " + refreshTopPanel());
-}
-
-function updatePartyData(fullPartyData) {
-	OKnesset.PartyStore.loadData(fullPartyData, false);
-}
-
-function updateMemberData(fullMemberData) {
-	OKnesset.MemberStore.loadData(fullMemberData, false);
-}
-/**
- * End of handle updating the application's data
- */
-
-
-/**
  *
  * @param date
  * @returns {String}
@@ -319,14 +67,24 @@ function getPartyFromPartyStoreByName(name) {
 
 }
 
+function getObjectFromStoreByID(store, id){
+	return getObjectFromStoreByFunc(store, function(r){
+		return r.data.id === parseInt(id)
+	});
+}
+
+function getObjectFromStoreByFunc(store, func){
+    var index = store.findBy(func);
+    return store.getAt(index);
+}
+
 //receives an array of id's and returns a array of objects of the members
-OKnesset.GetMembersById = function (ids) {
+function getMembersById(ids) {
 
 	if (ids.push === undefined) {
 		//assumming we got only one id
 			tmp=[]; tmp.push(ids); ids = tmp;
 	}
-
 	  var members = [];
 	  var storeCollection = OKnesset.MemberStore.snapshot?OKnesset.MemberStore.snapshot:OKnesset.MemberStore.data;
 	  storeCollection.items.forEach(function(member) {
@@ -351,3 +109,81 @@ OKnesset.GetMembersById = function (ids) {
 	  });
 	  return members;
 }
+
+
+
+/**
+ * options: an object with the following keys:
+ *	(string)apiKey, (function)success, (boolean)cache, (function)failure
+ * (object)urlOptions, (object)parameterOptions
+ */
+function getAPIData(options) {
+	var requestUrl = OKnessetAPIMapping[options.apiKey].url(options.urlOptions);
+
+	// if a cached version of the data exists, return it immediately
+	var cachedData = _cacheGet(requestUrl);
+	if (cachedData != null) {
+		//call callback function with cached data
+		options.success(cachedData);
+		return;
+	}
+
+	var parameters;
+	if (typeof OKnessetAPIMapping[options.apiKey].parameters === 'function') {
+		parameters = OKnessetAPIMapping[options.apiKey].parameters(options.parameterOptions);
+	} else {
+		parameters = OKnessetAPIMapping[options.apiKey].parameters;
+	}
+
+	// make request
+	Ext.util.JSONP.request({
+	    url: requestUrl,
+	    callbackKey : OKnessetAPIMapping[options.apiKey].callbackKey,
+	    params : parameters,
+		onFailure : options.failure,
+	    callback: function(results){
+	    	options.success(OKnessetAPIMapping[options.apiKey].parser(results));
+	    }
+	});
+
+	function _cacheGet(key) {
+		var cachedData = localStorage.getItem(key);
+
+		if (cachedData != null)
+			cachedData = JSON.parse(cachedData);
+
+		return cachedData;
+	}
+}
+
+
+// usage:
+// var callbackArray = new waitForAll(finalCallback, callbackA, callbackB...);
+// callbackArray[0] == callbackA
+// callbackArray[0] == callbackB
+function waitForAll(){
+	var callback = arguments[0];
+	args = Array.prototype.slice.call(arguments, 1); 
+	that = this;
+	this.functions = [];
+
+	var completedResults = [];
+	for (var i = 0; i < args.length; i++) {
+		var func = args[i];
+		var funcwrapper = function(func){
+			return function(){
+				var result = func.apply(that, arguments);
+				completedResults.push(result);
+				if (completedResults.length == args.length){
+					var result = {};
+					for (var i = completedResults.length - 1; i >= 0; i--) {
+						Ext.apply(result, completedResults[i]);
+					};
+					callback.call(that,result);
+				}
+			}
+		}(func);
+		this.functions.push(funcwrapper);
+	};
+}
+

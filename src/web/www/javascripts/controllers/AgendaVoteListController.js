@@ -16,12 +16,20 @@ Ext.regController('AgendaVoteList', {
 				});
         }
 
-        var findData = OKnesset.AgendaListStore.findBy(function(r){
-        	return r.data.id === parseInt(options.id)
-        });
-        findData = OKnesset.AgendaListStore.getAt(findData);
+        // getAt(0), because the AgendaDetailsStore is an array of one item due to mis-implementation of the store
+        findData = OKnesset.AgendaDetailsStore.getAt(0);
 
-        this.updateString(findData.data.votes)
+         //FIX for Adgenda vote list broken button link. (franco)
+         if (findData.data.votes[0].data !== undefined) {
+
+         	findDataObj = []
+         	findData.data.votes.forEach(function(subcls) {
+         	 findDataObj.push(subcls.data); //make subclass an object
+         	});
+         	findData.data.votes = findDataObj;
+         }
+
+        this.updateString(findData.data.votes);
 		OKnesset.AgendaVoteListStore.loadData(findData.data.votes);
 
         this.application.viewport.query('#toolbar')[0].setTitle(OKnesset.strings.AgendaVoteTitle + findData.data.name);
@@ -36,8 +44,7 @@ Ext.regController('AgendaVoteList', {
 	 }
 	 */
 	     updateString : function(votes) {
-			for (i=0 ; i<=votes.length-1; i++)
-			  {
+			for (i=0 ; i<=votes.length-1; i++)  {
 				if (votes[i].score==1)
 					{votes[i].scorestring=OKnesset.strings.fullsupport}
 
