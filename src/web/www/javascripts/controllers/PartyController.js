@@ -1,73 +1,84 @@
 OKnesset.app.controllers.Party = Ext.regController('Party', {
 
-    // index action
+	// index action
 	Index: function(options)
-    {
-        if ( ! this.partyView)
-        {
-            this.partyView = this.render({
-                xtype: 'PartyView',
-            });
-            var memberList = this.partyView.query('#MemberList')[0];
-            memberList.addListener('itemtap',
-                	function(that, index, item, e) {
-    					var record = that.store.getAt(index);
-    					OKnesset.app.controllers.navigation.dispatchPanel('Member/Index/' + record.data.id, options.historyUrl);
-    				});
-        }
+	{
+		var memberList, id , party, name, info, infoView;
+		if ( ! this.partyView)
+		{
+			this.partyView = this.render({
+				xtype: 'PartyView'
+			});
+			memberList = this.partyView.query('#MemberList')[0];
+			memberList.addListener('itemtap',
+				function(that, index, item, e) {
+					var record = that.store.getAt(index);
+					OKnesset.app.controllers.navigation.dispatchPanel('Member/Index/' + record.data.id, options.historyUrl);
+			});
+			this.partyView.query('#Button')[0].addListener('tap',
+				function(that, index, item, e) {
+					if (that.party_id) {
+						OKnesset.app.controllers.navigation.dispatchPanel('PartyInfo/Index/' + that.party_id, options.historyUrl);
+					}
+			});
+		}
 
-        var party = OKnesset.PartyStore.findBy(function(r){return r.data.id === parseInt(options.id)});
-        party = OKnesset.PartyStore.getAt(party);
-        var name = party.data.name;
-        // Analytics
-    	GATrackParty(name);
+		id = parseInt(options.id, 10);
+		party = getObjectFromStoreByID(OKnesset.PartyStore, id);
+		info = getObjectFromStoreByID(OKnesset.PartyInfoStore, id, 'party_id');
 
-        this.filterMembersByParty(party);
+		name = party.data.name;
 
-        // TODO currentParty is only needed for the email widget. Find a better way to fetch the current party
-    	this.currentParty = party.data;
+		// don't track if the panal was reached by pressing 'back'
+		if (options.pushed){
+			GATrackPage('PartyView', name);
+		}
 
-    	// in case the member list was scrolled down( because the user viewed the
-    	// panel for another member)
-    	if (options.pushed){
-	        var memberList = this.partyView.query('#MemberList')[0];
-	    	if (memberList.scroller) {
-	    		memberList.scroller.scrollTo({
-	    			x : 0,
-	    			y : 0
-	    		});
-	    	}
-    	}
+		this.filterMembersByParty(party);
 
-    	this.application.viewport.query('#toolbar')[0].setTitle(name);
-    	this.application.viewport.setActiveItem(this.partyView, options.animation);
-    },
-    getReviewButtonText : function(){
-    	return Ext.util.Format.format(
-				OKnesset.strings.emailParty,
-				this.currentParty.name);
-    },
-     getIdFromAbsoluteUrl: function(url){
-        var sub1 = url.substr("/party/".length);
-        return sub1.substr(0,sub1.indexOf('/'));
-    },
-	refresh : function() {
-		var party = getPartyFromPartyStoreByName(this.currentParty.name);
-        this.filterMembersByParty(party);
-        var memberList = this.partyView.query('#MemberList')[0];
-        memberList.refresh();
+		// TODO currentParty is only needed for the email widget. Find a better way to fetch the current party
+		this.currentParty = party.data;
+
+		// in case the member list was scrolled down( because the user viewed the
+		// panel for another member)
+		if (options.pushed){
+			if (this.partyView.scroller) {
+				this.partyView.scroller.scrollTo({
+					x : 0,
+					y : 0
+				});
+			}
+		}
+		this.partyView.query('#MiniText')[0].update(info && info.data || {});
+		this.partyView.query('#Button')[0].party_id = info && info.data.party_id;
+		this.application.viewport.query('#toolbar')[0].setTitle(name);
+		this.application.viewport.setActiveItem(this.partyView, options.animation);
 	},
-    // private
-    /*
-    Set the party filter on the store
-    */
 
-    filterMembersByParty : function(party) {
-        OKnesset.MemberStore.clearFilter(true);
-        OKnesset.MemberStore.filter({
-            property: 'party_id',
-            value : party.data.id});
-    }
+	getIdFromAbsoluteUrl: function(url){
+		var sub1 = url.substr("/party/".length);
+		return sub1.substr(0,sub1.indexOf('/'));
+	},
 
+	getNameById : function(partyId){
+		var party = getObjectFromStoreByID(OKnesset.PartyStore, partyId);
+		if (typeof party === 'undefined') {
+			OKnesset.log("Cannot find party from id '" + partyId + "'");
+			return "";
+		}
+		
+		return party.data.name;
+	},
 
+	filterMembersByParty : function(party) {
+		OKnesset.MemberStore.clearFilter(true);
+		OKnesset.MemberStore.filter({
+			property: 'party_id',
+			exactMatch : true,
+			value : party.data.id});
+	},
+
+	navigateToParty: function(partyId){
+		OKnesset.app.controllers.navigation.dispatchPanel('Party/Index/' + partyId, "");
+	}
 });

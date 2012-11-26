@@ -2,51 +2,63 @@ OKnesset.app.views.InfoView = new Ext.extend(Ext.Panel, {
 	id : 'InfoView',
 	layout : 'vbox',
 	cls : 'textCenter',
+	width : '90%',
+	height : '80%',	
 	floating : true,
 	centered : true,
-	items : [ {
-		tpl : '{dateString}',
-		id : 'updateDate'
-	}, {
-		xtype : 'spacer',
-		height : "2em"
-	}, {
-		xtype : 'button',
-		id : 'updateAppDataBtn',
-		width : "50%",
-		text : OKnesset.strings.updateNow
-	}, {
-		xtype : 'spacer',
-		height : "2em"
-	}, {
-		xtype : 'button',
-		id : 'displayDisclaimerBtn',
-		width : "50%",
-		text : OKnesset.strings.showDisclaimer
-	}, {
-		xtype : 'spacer',
-		height : "2em"
-	} ],
+	items : [ 
+	{
+		scroll : 'vertical',
+		id : 'pageDescription',
+		tpl : '<span>{text}</span>',
+		height: "100%"
+		// margin : "10 10 0 10",
+	}
+	// , {
+	// 	xtype : 'spacer',
+	// }, 
+	],
 	dockedItems : [ {
 		dock : 'top',
 		xtype : 'toolbar',
-		title : OKnesset.strings.openKnessetTitle
 	}, {
 		dock : 'bottom',
 		ui : 'light',
-		items : [ {
-			xtype : 'button',
-			id : 'cancelInfoBtn',
-			ui : 'confirm',
-			text : OKnesset.strings.back
-		} ]
+		items : [ 
+			{
+				xtype : 'button',
+				id : 'displayDisclaimerBtn',
+				width : "90%",
+				margin : "0 10 10 10",
+				text : OKnesset.strings.showDisclaimer
+			}, 
+			{
+		        // The email icon at the top left of the application toolbar
+		        xtype: 'button',
+		        id: 'emailReview',
+				width : "90%",
+				margin : "0 10 10 10",
+		        text: OKnesset.strings.emailButtonLabel,
+			},
+			{
+				xtype : 'button',
+				id : 'cancelInfoBtn',
+				ui : 'confirm',
+				text : OKnesset.strings.back
+			} ]
 	} ],
-	initComponent : function() {
-    	var viewport = Ext.ApplicationManager.get("oknesset").viewport;
-		this.width = viewport.getWidth() * 0.9;
-		this.height = viewport.getHeight() * 0.65;
-		OKnesset.app.views.InfoView.superclass.initComponent.apply(this,
-				arguments);
+	listeners:{
+		// layout the pageDescription height, because it varies
+		afterlayout : {
+			fn : function(that, layout ){
+				var textHeight = that.getHeight();
+				for (var i = 0; i < that.dockedItems.items.length; i++) {
+					textHeight -= that.dockedItems.items[i].getHeight();
+				};
+				that.items.getAt(0).setHeight(textHeight - 10);
+			}
+		}
+
 	}
 });
 

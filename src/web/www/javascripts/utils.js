@@ -8,45 +8,82 @@ function googleAnalytics() {
 		googleAnalytics.startTrackerWithAccountID(OKnesset.GAID);
 		googleAnalytics.setCustomVariable(1, "appVersion", OKnesset.appVersion,
 				2);
-		googleAnalytics.trackPageview("/app");
+		googleAnalytics.trackPageview("/app/");
 	}
 }
 
-function GATrackMember(name) {
+GApageMapping = {
+	MemberListView 					: "/app/member/",
+	MemberView 						: "/app/member/",
+	BillsView						: "/app/member/bills/",
+	BillDetailsView					: "/app/bill/",
+	CommitteesView 					: "/app/member/committees/",
+	PartyListView					: "/app/party/",
+	PartyView 						: "/app/party/",
+	PartyInfoView 					: "/app/party/info/",
+	memberVotesView					: "/app/member/votes/",
+	VoteDetailsView					: "/app/vote/",
+	AgendaListView					: "/app/agenda/",
+	AgendaDetailsView				: "/app/agenda/",
+	AgendaVoteListView				: "/app/agenda/votes/",
+	AgendaMembersSupportListView	: "/app/agenda/members/",
+	AgendaPartiesSupportListView	: "/app/agenda/parties/",
+	AllCommitteesView				: "/app/committee/",
+	CommitteeDetailsView			: "/app/committee/",
+	ProtocolView					: "/app/committee/protocol/",
+	ProtocolSectionView				: "/app/committee/protocol/sections/",
+	InfoView 						: "/app/info/"
+
+}
+
+function GATrackPage(page, extra) {
 	if (isPhoneGap()) {
-		googleAnalytics.trackPageview("/app/member/" + name);
+		googleAnalytics.trackPageview(GApageMapping[page] + extra);
+	} else {
+		OKnesset.log("Google Analytics Page" + GApageMapping[page] + "" + extra);
 	}
 }
 
-function GATrackParty(name) {
-	if (isPhoneGap()) {
-		googleAnalytics.trackPageview("/app/party/" + name);
-	}
-}
-
-function GATrackBillCanceled(url) {
+function GATrackEvent(category, action, label) {
 	if (isPhoneGap()) {
 		googleAnalytics.trackEvent(function() {
-		}, "bills", "cancelView", url, undefined, true);
-	}
-}
-
-function GATrackBill(url, callback) {
-	if (isPhoneGap()) {
-		if (isAndroid()) {
-			googleAnalytics.trackPageview("/app/external" + url, {
-				dispatch : true
-			}, callback, callback);
-		} else if (isiOS()) {
-			googleAnalytics.trackPageview("/app/external" + url, callback, {
-				dispatch : true
-			});
-		}
+		}, category, action, label, undefined, true);
+	} else {
+		OKnesset.log("Google Analytics Event. (category " + category + ", action " + action + ", label " + label + ")");
 	}
 }
 
 /**
  * End of google analytics
+ */
+
+
+/**
+ * Bills
+ */
+ function billStageTextToIndex(stage){
+	if (stage === OKnesset.strings.billStage6){
+		return 6;
+	} 	
+	if (stage === OKnesset.strings.billStage5){
+		return 5;
+	} 	
+	if (stage === OKnesset.strings.billStage4){
+		return 4;
+	} 	
+	if (stage === OKnesset.strings.billStage3){
+		return 3;
+	} 	
+	if (stage === OKnesset.strings.billStage2){
+		return 2;
+	} 	
+	if (stage === OKnesset.strings.billStage1){
+		return 1;
+	} 	
+ }
+
+/**
+ * Bills
  */
 
 /**
@@ -67,9 +104,12 @@ function getPartyFromPartyStoreByName(name) {
 
 }
 
-function getObjectFromStoreByID(store, id){
+function getObjectFromStoreByID(store, id, id_key){
+	if (typeof id_key === 'undefined'){
+		id_key = 'id';
+	}
 	return getObjectFromStoreByFunc(store, function(r){
-		return r.data.id === parseInt(id)
+		return r.data[id_key] === parseInt(id)
 	});
 }
 
@@ -83,6 +123,9 @@ function getMembersById(ids) {
 
 	if (ids.push === undefined) {
 		//assumming we got only one id
+			if (typeof ids === 'string'){
+				ids = parseInt(ids);
+			}
 			tmp=[]; tmp.push(ids); ids = tmp;
 	}
 	  var members = [];
@@ -114,19 +157,18 @@ function getMembersById(ids) {
 
 /**
  * options: an object with the following keys:
- *	(string)apiKey, (function)success, (boolean)cache, (function)failure
+ *	(string)apiKey, (function)success, (boolean)diskCache, (boolean)forceLoad,(function)failure
  * (object)urlOptions, (object)parameterOptions
- */
-function getAPIData(options) {
-	var requestUrl = OKnessetAPIMapping[options.apiKey].url(options.urlOptions);
 
-	// if a cached version of the data exists, return it immediately
-	var cachedData = _cacheGet(requestUrl);
-	if (cachedData != null) {
-		//call callback function with cached data
-		options.success(cachedData);
-		return;
+ * retuns: ture if data was retrieved from cache. false otherwise
+ */
+memcache = {};
+function getAPIData(options) {
+	if (typeof OKnessetAPIMapping === 'undefined'){
+		options.failure("The file apiParser.js has not been loaded from the server");
+		return false;
 	}
+	var requestUrl = OKnessetAPIMapping[options.apiKey].url(options.urlOptions);
 
 	var parameters;
 	if (typeof OKnessetAPIMapping[options.apiKey].parameters === 'function') {
@@ -135,6 +177,34 @@ function getAPIData(options) {
 		parameters = OKnessetAPIMapping[options.apiKey].parameters;
 	}
 
+	cacheKey = requestUrl + JSON.stringify(parameters);
+	// if a cached version of the data exists, return it immediately
+	var cachedData = _diskCacheGet(cacheKey);
+	var storeInCacheOnly = false;
+	if (cachedData !== null) {
+		//call callback function with cached data
+		options.success(cachedData.data);
+		if (!options.forceLoad && !has24HoursPassedSince(new Date(cachedData.date))){
+			// do not call the server if the disk cache is less than a day old,
+			// and forceLoad is not required
+			return true;
+		} else {
+			storeInCacheOnly = true;
+		}
+	} else {
+		cachedData = _cacheGet(cacheKey);
+		if ((typeof cachedData !== 'undefined') && cachedData !== null ) {
+			//call callback function with cached data
+			options.success(cachedData);
+			if (!options.forceLoad) {
+				return true;
+			} else {
+				storeInCacheOnly = true;
+			}
+		}
+	}
+
+
 	// make request
 	Ext.util.JSONP.request({
 	    url: requestUrl,
@@ -142,20 +212,56 @@ function getAPIData(options) {
 	    params : parameters,
 		onFailure : options.failure,
 	    callback: function(results){
-	    	options.success(OKnessetAPIMapping[options.apiKey].parser(results));
+	    	OKnessetAPIMapping[options.apiKey].parser(results, 
+	    		function(parseResults){
+	    			// success
+	    			memcache[cacheKey] = parseResults;
+	    			if (options.diskCache){
+	    				localStorage.setItem(cacheKey, JSON.stringify({
+	    					date : new Date(),
+	    					data : parseResults
+	    				}));
+	    			}
+
+	    			if (!storeInCacheOnly){
+	    				options.success(parseResults);
+	    			}
+	    		},
+	    		function(parseResults){
+	    			// failure
+	    			if (!storeInCacheOnly){
+	    				options.failure(parseResults);
+	    			}
+	    		});
+	    	;
 	    }
 	});
+	if (storeInCacheOnly){
+		// this menas the callback has already been invoked on the caller
+		return true;
+	} else {
+		return false;
+	}
 
-	function _cacheGet(key) {
+	function _diskCacheGet(key) {
 		var cachedData = localStorage.getItem(key);
 
-		if (cachedData != null)
+		if (cachedData !== null)
 			cachedData = JSON.parse(cachedData);
 
 		return cachedData;
 	}
+	function _cacheGet(key) {
+		var cachedData = memcache[key];
+		return cachedData;
+	}
 }
 
+function has24HoursPassedSince(theDate){
+	var now = new Date();
+
+	return (now.getTime() > theDate.getTime() + 1000 * 60 * 60 * 24);
+}
 
 // usage:
 // var callbackArray = new waitForAll(finalCallback, callbackA, callbackB...);

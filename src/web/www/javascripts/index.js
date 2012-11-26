@@ -4,7 +4,7 @@
 Ext.namespace('OKnesset');
 
 OKnesset.GAID = "Demo-ID-replace-with-real-id";
-OKnesset.appVersion = "1.0.0";
+OKnesset.appVersion = "2";
 
 OKnesset.log = function(string) {
 	if (OKnesset.debug) {
@@ -15,7 +15,7 @@ OKnesset.log = function(string) {
 Ext.regApplication({
 	name : 'OKnesset.app',
 	id : "oknesset",
-	defaultUrl : 'navigation/push/PartyList/Index',
+	defaultUrl : 'navigation/push/Homepage/Index',
 	launch : function() {
 		// Invoked immediately after the OKnesset.app created.
 		this.launched = true;
@@ -36,10 +36,15 @@ Ext.regApplication({
 		//The main view, holds all the panels of the application.
 		this.viewport = new OKnesset.app.views.Viewport();
 
+        // set the info button handler
+        this.viewport.query('#info')[0].setHandler(function(){
+        	OKnesset.app.controllers.navigation.dispatchDialog('Info/Index/' + this.viewport.getActiveItem().xtype);
+        }, this);
+
 		// set the menu panel
-        this.viewport.query('#openMenu')[0].setHandler(function(){
-            OKnesset.app.views.Viewport.AppMenu.showBy(this);
-        });
+        // this.viewport.query('#openMenu')[0].setHandler(function(){
+        //     OKnesset.app.views.Viewport.AppMenu.showBy(this);
+        // });
 
         OKnesset.app.views.Viewport.menuList.addListener('itemtap',
             	function(that, index, item, e) {
@@ -53,24 +58,6 @@ Ext.regApplication({
 					that.deselect();
 					OKnesset.app.views.Viewport.AppMenu.hide();
 				});
-
-//        //
-//        // set the AllCommittees button handler
-//        // delete this button after Protocol page
-//        //
-//        this.viewport.query('#prot')[0].setHandler(function(){
-//        	OKnesset.app.controllers.navigation.dispatchPanel('Protocol/Index');
-//
-//        });
-//        //
-
-
-
-//        // set the protocol button handler
-//        this.viewport.query('#allComm')[0].setHandler(function(){
-//        	OKnesset.app.controllers.navigation.dispatchPanel('AllCommittees/Index');
-//
-//        });
 
 		// set the back button handler
         this.viewport.query('#backBtn')[0].setHandler(function() {
@@ -100,25 +87,28 @@ function secondaryLaunch() {
 		time.start('Secondary Launch');
 	}
 
+	localStorage.setItem('version', OKnesset.appVersion);
+
+	if (isPhoneGap()){
+		// load the api parser
+		Ext.Ajax.request({
+		    url: 'http://open-knesset-mobile.appspot.com/static/V2.0/apiParser.js',
+			failure : function(results){
+				console.log("Error loding apiParser.js from server");
+			},
+		    success: function(results){
+		    	eval(results.responseText);
+				loadPartiesAndMembersDataIfNeeded();
+			}
+		});
+	} else {
+		loadPartiesAndMembersDataIfNeeded()
+	}
+
 	var disclaimerDismissed = localStorage.getItem("disclaimerDismissed");
 	if (disclaimerDismissed !== 'true') {
 		OKnesset.app.controllers.navigation.dispatchDialog('Disclaimer/Index');
 	}
-
-
-	// When the applicaiton comes back from the background state on the iOS or
-	// Android, check if there are any updates from teh oknesset website.
-	OKnesset.resumeCount = 0;
-	document.addEventListener("resume", function() {
-		window.setTimeout(function() {
-			// For Android. the 'resume' event is fired even when the
-			// application launches, so we need to ignore this first event
-			if (isiOS() || isAndroid() && OKnesset.resumeCount != 0) {
-				checkFullDataFromWeb();
-			}
-			OKnesset.resumeCount++;
-		}, 0);
-	}, false);
 
 	googleAnalytics();
 
@@ -130,6 +120,33 @@ function secondaryLaunch() {
 	if (OKnesset.debug){
 		time.stop('Secondary Launch');
 		time.report('Secondary Launch');
+	}
+
+	function loadPartiesAndMembersDataIfNeeded(){
+        getAPIData({
+            apiKey:'parties',
+            diskCache : true,
+            forceLoad : true,
+            success:function(data){
+                OKnesset.PartyStore.loadData(data);
+            },
+            failure:function(result){
+                console.log("error receiving parties data. ", result);
+            }
+        });
+
+		getAPIData({
+			apiKey:'members',
+            diskCache : true,
+            forceLoad : true,
+			success:function(data){
+                OKnesset.MemberStore.loadData(data);
+            },
+			failure:function(result){
+				console.log("error receiving memebers data. ", result);
+			}
+		});
+
 	}
 }
 
@@ -147,3 +164,18 @@ OKnesset.app.onBackKey = function () {
 }
 
 document.addEventListener("deviceready", OKnesset.mainLaunch, false);
+
+function appUpdate(){
+	var previosVersion = localStorage.getItem('version');
+
+	if (previosVersion === null){
+		// upgrade from v1.0
+		localStorage.removeItem('PartyData');
+		localStorage.removeItem('PartyDataDate');
+		localStorage.setItem("disclaimerDismissed", false);
+	} else {
+		// new installation
+	}
+}
+
+appUpdate();

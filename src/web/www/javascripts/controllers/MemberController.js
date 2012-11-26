@@ -9,33 +9,51 @@ OKnesset.app.controllers.Member = Ext.regController('Member', {
 			var memberController = this;
         }
 
-        OKnesset.app.views.MemberView.memberBillsBtn.setHandler(this.dispatchBills,options);
-
-        OKnesset.app.views.MemberView.memberCommitteesBtn.setHandler(this.dispatchCommittees,options);
-
-		OKnesset.app.views.MemberView.memberVotesBtn.setHandler(this.dispatchVotes,options);
+        this.memberView.query('#memberBillsBtn')[0].setHandler(this.dispatchBills,options);
+        this.memberView.query('#memberCommitteesBtn')[0].setHandler(this.dispatchCommittees,options);
+        this.memberView.query('#memberVotesBtn')[0].setHandler(this.dispatchVotes,options);
 
         var member = this.currentMember = getMembersById(options.id)[0];
-        GATrackMember(member.name);
+
+        // don't track if the panal was reached by pressing 'back'
+        if (options.pushed){
+            GATrackPage('MemberView', member.name);
+        }
 
         // load the extra member data
         var that = this;
         that.memberView.getComponent('loading').show();
-        getAPIData({
+        var dataRecevied = getAPIData({
             apiKey:'member',
             urlOptions : options.id,
             success:function(data){
+                var billsReceived = getAPIData({
+                    apiKey : 'memberBills',
+                    parameterOptions : options.id,
+                    success:function(billsData){
+                        that.updateBills(billsData);
+                    },
+                    failure:function(result){
+                        console.log("Error receiving memeber bills data. ", result);
+                    }
+                });
+                if (!billsReceived) {
+                    that.memberView.query('#memberBillsBtn')[0].setText(OKnesset.strings.loadingBills);
+                    that.memberView.query('#memberBillsBtn')[0].disable();
+                }
+
                 that.updateData(data);
                 that.memberView.getComponent('loading').hide();
             },
             failure:function(result){
-                console.log("error receiving memebers data. ", result);
+                console.log("Error receiving memeber data. ", result);
             }
         });
 
         //http://www.oknesset.org/api/v2/bill/?format=json&proposer=814
-
-        this.updateData(member);
+        if (!dataRecevied){
+            this.updateData(member);
+        }
         this.application.viewport.setActiveItem(this.memberView, options.animation);
     },
 
@@ -51,10 +69,6 @@ OKnesset.app.controllers.Member = Ext.regController('Member', {
         OKnesset.app.controllers.navigation.dispatchPanel('memberVotes/Index/' + this.id, this.historyUrl)
     },
 
-    getReviewButtonText: function(){
-        return Ext.util.Format.format(OKnesset.strings.emailMember, this.currentMember.name);
-    },
-
     getEmailButtonText: function(){
         return Ext.util.Format.format(OKnesset.strings.writeTo, this.currentMember.name);
     },
@@ -65,8 +79,9 @@ OKnesset.app.controllers.Member = Ext.regController('Member', {
 
     sendEmail : function() {
     	var recipient = this.email;
-    	OKnesset.log("** sending email with recipient " + recipient);
     	if (isPhoneGap()) {
+            GATrackEvent('email', this.name);
+
     		if (isiOS()) {
     			var emailCallback = function(result) {
     				// called after email has been sent
@@ -75,11 +90,13 @@ OKnesset.app.controllers.Member = Ext.regController('Member', {
     				}
     			};
     			window.plugins.emailComposer.showEmailComposerWithCB(emailCallback,
-    					"", "", recipient);
+    					"", OKnesset.strings.emailBody, recipient);
     		} else if (isAndroid) {
     			var extras = {};
     			extras[WebIntent.EXTRA_SUBJECT] = "";
+                extras[WebIntent.EXTRA_TEXT] = OKnesset.strings.emailBody;
     			extras[WebIntent.EXTRA_EMAIL] = [ recipient ];
+
     			window.plugins.webintent.startActivity({
     				action : WebIntent.ACTION_SEND,
     				type : 'text/plain',
@@ -91,46 +108,55 @@ OKnesset.app.controllers.Member = Ext.regController('Member', {
     				alert(OKnesset.strings.errorAndroidEmail);
     			});
     		}
-    	}
+    	} else {
+            OKnesset.log("sending email to member " + this.name + " via email " +recipient);
+        }
     },
     phoneMember : function() {
 
     	var phone_num = this.phone;
-    	OKnesset.log("** calling number " + phone_num);
     	if (isPhoneGap()) {
+            GATrackEvent('call', this.name);
     		document.location="tel:+972-" + phone_num.substr(1);
-    	}
+    	} else {
+            OKnesset.log("calling number " + phone_num);
+        }
+    },
+
+    updateBills: function(data){
+        if (!data.bills || data.bills.length==0) {
+            this.memberView.query('#memberBillsBtn')[0].setText(OKnesset.strings.noBills);
+        } else {
+            this.memberView.query('#memberBillsBtn')[0].setText("" + data.bills.length + " " + OKnesset.strings.billsOutOf + " " + data.total);
+        }
+        this.memberView.query('#memberBillsBtn')[0].enable();
     },
     updateData: function(member){
 
+        this.memberView.query('#MemberImage')[0].update(member);
         this.memberView.query('#MemberInfo')[0].update(member);
         this.application.viewport.query('#toolbar')[0].setTitle(member.name);
-        OKnesset.app.views.MemberView.memberEmailBtn.setText(this.getEmailButtonText());
-        OKnesset.app.views.MemberView.memberEmailBtn.setHandler(this.sendEmail,member);
-        OKnesset.app.views.MemberView.memberCallBtn.setText(this.getPhoneCallButtonText());
-        OKnesset.app.views.MemberView.memberCallBtn.setHandler(this.phoneMember,member);
+        this.memberView.query('#memberEmailBtn')[0].setText(this.getEmailButtonText());
+        this.memberView.query('#memberEmailBtn')[0].setHandler(this.sendEmail,member);
+        this.memberView.query('#memberCallBtn')[0].setText(this.getPhoneCallButtonText());
+        this.memberView.query('#memberCallBtn')[0].setHandler(this.phoneMember,member);
 
+
+        // TODO: member data returned from the server, does not return 
+        // committee data anymore. To link between memebers and committees, 
+        // we need to reverse-link from the commttees api.
         if (!member.committees || member.committees.length == 0) {
-            OKnesset.app.views.MemberView.memberCommitteesBtn.hide();
+            this.memberView.query('#memberCommitteesBtn')[0].hide();
         } else {
-            OKnesset.app.views.MemberView.memberCommitteesBtn.show();
+            this.memberView.query('#memberCommitteesBtn')[0].show();
         }
-
-
-        if (!member.bills || member.bills.length==0) {
-        	OKnesset.app.views.MemberView.memberBillsBtn.setText(OKnesset.strings.noBills);
-        	OKnesset.app.views.MemberView.memberBillsBtn.disable();
-        } else {
-        	OKnesset.app.views.MemberView.memberBillsBtn.setText(OKnesset.strings.bills);
-        	OKnesset.app.views.MemberView.memberBillsBtn.enable();
-        }
-        if (!member.committees || member.committees.length == 0) {
-        	OKnesset.app.views.MemberView.memberCommitteesBtn.setText(OKnesset.strings.noCommittees);
-        	OKnesset.app.views.MemberView.memberCommitteesBtn.disable();
-        } else {
-        	OKnesset.app.views.MemberView.memberCommitteesBtn.setText(OKnesset.strings.committees);
-        	OKnesset.app.views.MemberView.memberCommitteesBtn.enable();
-        }
+        // if (!member.committees || member.committees.length == 0) {
+        //     this.memberView.query('#memberCommitteesBtn')[0].setText(OKnesset.strings.noCommittees);
+        //     this.memberView.query('#memberCommitteesBtn')[0].disable();
+        // } else {
+        //     this.memberView.query('#memberCommitteesBtn')[0].setText(OKnesset.strings.committees);
+        //     this.memberView.query('#memberCommitteesBtn')[0].enable();
+        // }
     },
 
     getIdFromAbsoluteUrl: function(url){

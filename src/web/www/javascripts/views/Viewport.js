@@ -7,27 +7,30 @@ OKnesset.app.views.Viewport = new Ext.extend(Ext.Panel, {
         xtype: 'toolbar',
         title: '',
         items: [
-        {
-             xtype: 'spacer'
-        },
-        {
-            id: 'openMenu',
-            iconCls: 'list',
-            iconMask: true
-        },
+        // {
+        //     id: 'openMenu',
+        //     iconCls: 'list',
+        //     iconMask: true
+        // },
         {
             id: 'backBtn',
 			hidden : true,
             iconCls: 'right2',
             iconMask: true,
             ui: 'action',
-        }, ],
+        }, 
+        {
+             xtype: 'spacer'
+        },
+        {
+            // The "i" at the top left of the application toolbar
+            ui: 'plain',
+            id: 'info',
+            iconMask: true,
+            iconCls: 'info',
+        }] 
     }, ],
     initComponent: function(){
-        // this.appMenu = this.render({
-        //         xtype: 'AppMenu'
-        //     });
-        //OKnesset.app.views.Viewport.AppMenu.el.appendTo(document.body);
         OKnesset.app.views.Viewport.AppMenu.setFloating(true);
         OKnesset.app.views.Viewport.AppMenu.setSize(150, 200);
         OKnesset.app.views.Viewport.superclass.initComponent.apply(this, arguments);
@@ -53,7 +56,6 @@ OKnesset.app.views.Viewport.AppMenu = new Ext.Panel({
     hidden : true
 });
 
-//Ext.reg('AppMEnu', OKnesset.app.views.Viewport.AppMenu);
 
 
 

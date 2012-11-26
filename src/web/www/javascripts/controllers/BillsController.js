@@ -14,13 +14,44 @@ Ext.regController('Bills', {
             });
         }
 
-        //ROYCHANGE
-        // var member = OKnesset.MemberStore.findBy(function(r){
-        //     return r.data.id === parseInt(options.id)
-        // });
-        // member = this.currentMember = OKnesset.MemberStore.getAt(member).data;
-        var member = this.currentMember = getMembersById(options.id)[0];
-        OKnesset.MemberBillsStore.loadData(member.bills);
+        var that = this;
+
+        getAPIData({
+            apiKey:'member',
+            urlOptions : options.id,
+            success:function(data){
+                var member = data;
+
+                // don't track if the panal was reached by pressing 'back'
+                if (options.pushed){
+                    GATrackPage('BillsView', member.name);
+                }
+
+                getAPIData({
+                    apiKey : 'memberBills',
+                    parameterOptions : options.id,
+                    success:function(billsData){
+                        OKnesset.MemberBillsStore.loadData(billsData.bills);                        
+                        // if there are no bills for the current member, display a text explaining
+                        // that.
+                        if (that.hasExcuseForNoBills(member)) {
+                            that.billsView.query('#MemberBillList')[0].emptyText = "<br/><br/><br/>" +
+                                OKnesset.strings.excuseForNoBills;
+                        } else {
+                            that.billsView.query('#MemberBillList')[0].emptyText = "<br/><br/><br/>" +
+                                OKnesset.strings.hasNoBillsTitle;
+                        }
+                        that.billsView.query('#MemberBillList')[0].refresh();                
+                    },
+                    failure:function(result){
+                        console.log("Error receiving memeber bills data. ", result);
+                    }
+                });
+            },
+            failure:function(result){
+                console.log("Error receiving memeber data. ", result);
+            }
+        });
 
         // scroll bill list up
         if (options.pushed) {
@@ -32,27 +63,10 @@ Ext.regController('Bills', {
                 });
             }
         }
-        // if there are no bills for the current member, display a text explaining
-        // that.
-        if (this.hasExcuseForNoBills(member)) {
-            this.billsView.query('#MemberBillList')[0].emptyText = "<br/><br/><br/>" +
-            OKnesset.strings.excuseForNoBills;
-        } else {
-            this.billsView.query('#MemberBillList')[0].emptyText = "";
-        }
-        this.billsView.query('#MemberBillList')[0].refresh();
+
 
         this.application.viewport.setActiveItem(this.billsView, options.animation);
     },
-
-
-    refresh: function(){
-
-
-        var billList = this.billsView.query('#MemberBillList')[0];
-        billList.refresh();
-    },
-
     /**
      * Returns true if the member is a minister, or is the chairperson of the
      * Knesset.
@@ -61,7 +75,10 @@ Ext.regController('Bills', {
      * @returns {Boolean}
      */
     hasExcuseForNoBills: function(member){
-        return (member.roles.indexOf(OKnesset.strings.ministerIndicator) != -1 || member.roles === OKnesset.strings.knessetChairman);
+        return (
+            member.current_role_descriptions !== null &&
+            (member.current_role_descriptions.indexOf(OKnesset.strings.ministerIndicator) != -1 || 
+            member.current_role_descriptions === OKnesset.strings.knessetChairman));
     },
 
     /**
@@ -70,32 +87,6 @@ Ext.regController('Bills', {
      */
     _gotoBill: function(record){
         var bill = record.data;
-        bill.id = bill.url.match(/\/(\d+)\/$/)[1];
-        if (bill.id != null)
-            OKnesset.app.controllers.navigation.dispatchPanel('BillDetails/Index/' + bill.id, this.historyUrl);
-    },
-
-    _gotoBillCallback: function(url, billUrl){
-        // in iOS, this function is called form native code, and it is necessary
-        // that the next call to native code via phonegap command would not be
-        // executed in the same "thread".
-        window.setTimeout(function(){
-            GATrackBill(billUrl, function(){
-                if (isAndroid()) {
-                    window.plugins.webintent.startActivity({
-                        action: WebIntent.ACTION_VIEW,
-                        url: url
-                    }, function(){
-                        // success callback
-                    }, function(){
-                        alert(OKnesset.strings.errorOpenBill)
-                    });
-                } else if (isiOS()) {
-                    document.location = url;
-                }
-            });
-        }, 10);
+        OKnesset.app.controllers.navigation.dispatchPanel('BillDetails/Index/' + bill.id, this.historyUrl);
     }
-
-
 });
