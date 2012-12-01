@@ -2,7 +2,7 @@
  * The Member panel (בנימין נתניהו, גדעון סער) - displays info on a specific
  * member
  */
-OKnesset.app.views.MemberView = new Ext.extend(Ext.Panel, {
+OKnesset.app.views.MemberView = new Ext.extend(OKnesset.Panel, {
     id: 'MemberView',
     layout: {
         type: 'vbox',
@@ -11,15 +11,7 @@ OKnesset.app.views.MemberView = new Ext.extend(Ext.Panel, {
     currentMemeber: null,
     initComponent: function(){
         this.infoWrapper = new OKnesset.app.views.MemberView.InfoWrapper();
-        this.items = [
-            new Ext.Panel({
-                  id: "loading",
-                  cls: 'titlePanel',
-                  height : "2em",
-                  padding: '5',
-                  html:'<div class="hebTitle">'+ OKnesset.strings.LoadingPlsWait + '</div>'
-                }),        
-            this.infoWrapper];
+        this.items = [this.infoWrapper];
         OKnesset.app.views.MemberView.superclass.initComponent.apply(this, arguments);
     }
 });
@@ -52,6 +44,7 @@ OKnesset.app.views.MemberView.InfoWrapper = new Ext.extend(Ext.Panel, {
             flex : 2,
             id: 'MemberInfo',
             tpl: memberPanelHtml,
+            margin : '0 10 0 0',
             cls:'memberViewInfo',
           },
         ]
