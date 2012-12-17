@@ -66,7 +66,7 @@ Ext.regController('memberVotes', {
 		var member = getMembersById(options.id)[0];
 		
 		//Change toolbar title
-		this.application.viewport.query('#toolbar')[0].setTitle(OKnesset.strings.votes + ": " + member.name);
+		this.application.viewport.query('#toolbar')[0].setTitle(member.name);
 
 
 
